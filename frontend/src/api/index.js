@@ -1,4 +1,5 @@
-const BASE = "/api";
+// Grab the Render URL from Vercel's environment variables
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 /**
  * Upload PDF files. Returns { collectionName, chunksProcessed }.
@@ -9,7 +10,12 @@ export async function uploadPDFs(files, onProgress) {
   const formData = new FormData();
   for (const file of files) formData.append("pdfs", file);
 
-  const res = await fetch(`${BASE}/upload`, { method: "POST", body: formData });
+  // FIXED: Now uses API_BASE_URL so it goes to Render instead of Vercel
+  const res = await fetch(`${API_BASE_URL}/api/upload`, {
+    method: "POST",
+    body: formData
+  });
+
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || "Upload failed");
@@ -22,44 +28,54 @@ export async function uploadPDFs(files, onProgress) {
  * Stream a chat response. Calls onChunk(delta: string) for each token,
  * resolves with the full answer string when done.
  */
-export async function streamChat(question, collectionName, onChunk) {
-  const res = await fetch(`${BASE}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, collectionName }),
-  });
+export const streamChat = async (question, collectionName, onToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ question, collectionName }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || "Chat failed");
-  }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server responded with status: ${response.status}`);
+    }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let full = "";
-  let buffer = "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop(); // keep incomplete line
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop();
 
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const payload = line.slice(6).trim();
-      if (payload === "[DONE]") break;
-      try {
-        const { delta } = JSON.parse(payload);
-        full += delta;
-        onChunk(delta);
-      } catch {
-        // ignore parse errors
+      for (const part of parts) {
+        if (part.trim() === "") continue;
+
+        if (part.startsWith("data: ")) {
+          const dataStr = part.replace("data: ", "").trim();
+
+          if (dataStr === "[DONE]") return;
+
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.delta) {
+              onToken(parsed.delta);
+            }
+          } catch (e) {
+            console.error("Failed to parse complete stream chunk:", dataStr);
+          }
+        }
       }
     }
+  } catch (error) {
+    console.error("Stream Chat Error:", error);
+    throw error;
   }
-
-  return full;
-}
+};
