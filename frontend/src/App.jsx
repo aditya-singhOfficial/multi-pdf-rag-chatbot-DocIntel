@@ -9,6 +9,8 @@ import {
   Loader2,
   FileText,
   Trash2,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import axios from "axios";
 import Message from "./components/Message";
@@ -28,6 +30,9 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  
+  // ✨ NEW: Upload Phase Tracking ✨
+  const [uploadPhaseIndex, setUploadPhaseIndex] = useState(0);
 
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
@@ -36,12 +41,28 @@ export default function App() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ✨ NEW: Auto-open sidebar on mobile for new users
+  // Auto-open sidebar on mobile for new users
   useEffect(() => {
     if (!isReady && window.innerWidth <= 768) {
       setMobileMenuOpen(true);
     }
-  }, []); // Runs once on mount
+  }, []); 
+
+  // ✨ NEW: Simulated Progress Tracker Effect ✨
+  // This smoothly advances the UI steps to give users visual feedback while the server works
+  useEffect(() => {
+    let timeouts = [];
+    if (isProcessing) {
+      setUploadPhaseIndex(0);
+      timeouts.push(setTimeout(() => setUploadPhaseIndex(1), 1500)); // Extracting
+      timeouts.push(setTimeout(() => setUploadPhaseIndex(2), 3500)); // Chunking
+      timeouts.push(setTimeout(() => setUploadPhaseIndex(3), 6000)); // Embeddings
+      timeouts.push(setTimeout(() => setUploadPhaseIndex(4), 9500)); // Indexing
+    } else {
+      setUploadPhaseIndex(0);
+    }
+    return () => timeouts.forEach(clearTimeout);
+  }, [isProcessing]);
 
   const handleInput = (e) => {
     setInput(e.target.value);
@@ -51,13 +72,8 @@ export default function App() {
     }
   };
 
-  // ==========================
-  // FILE SELECTION & VALIDATION
-  // ==========================
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
-
-    // STRICT FILTER: Keep only PDF files
     const validPdfs = selectedFiles.filter(
       (file) =>
         file.type === "application/pdf" ||
@@ -71,7 +87,6 @@ export default function App() {
     } else {
       setUploadError(null);
     }
-
     setFiles(validPdfs);
   };
 
@@ -79,9 +94,6 @@ export default function App() {
     setFiles(files.filter((_, index) => index !== indexToRemove));
   };
 
-  // ==========================
-  // UPLOAD LOGIC
-  // ==========================
   const handleUpload = async () => {
     if (files.length === 0) return;
     setIsProcessing(true);
@@ -96,8 +108,8 @@ export default function App() {
       setChunksInfo(res.data.chunksProcessed);
       setIsReady(true);
       setMessages([]);
-      setFiles([]); // Clear queue on success
-      setMobileMenuOpen(false); // Auto-close menu on success
+      setFiles([]); 
+      setMobileMenuOpen(false); 
     } catch (error) {
       const rawError =
         error.response?.data?.error || error.message || "Upload failed";
@@ -114,9 +126,6 @@ export default function App() {
     }
   };
 
-  // ==========================
-  // CHAT LOGIC
-  // ==========================
   const handleSend = async () => {
     const question = input.trim();
     if (!question || !isReady || isStreaming) return;
@@ -166,6 +175,15 @@ export default function App() {
     "What methodology was used?",
   ];
 
+  // ✨ NEW: Processing Steps Array ✨
+  const processingSteps = [
+    "Reading PDF documents",
+    "Extracting & cleaning text",
+    "Creating semantic chunks",
+    "Generating vector embeddings",
+    "Indexing in database",
+  ];
+
   return (
     <div className="app-layout">
       {mobileMenuOpen && (
@@ -183,57 +201,88 @@ export default function App() {
           </h1>
 
           <div className="sidebar-upload-section">
-            <div className="upload-dropzone">
-              <input
-                type="file"
-                multiple
-                accept=".pdf"
-                className="file-input-hidden"
-                id="file-upload"
-                onClick={(e) => {
-                  e.target.value = null;
-                }}
-                onChange={handleFileSelect}
-              />
-              <label htmlFor="file-upload" className="upload-label">
-                <Upload className="upload-icon" size={24} />
-                <span className="upload-text">
-                  Drop PDFs here or click to browse
-                </span>
-              </label>
-            </div>
-
-            {files.length > 0 && (
-              <div className="selected-files-list">
-                {files.map((file, index) => (
-                  <div key={index} className="file-item">
-                    <div className="file-info">
-                      <FileText size={14} className="text-accent" />
-                      <span className="file-name">{file.name}</span>
-                    </div>
-                    <button
-                      className="file-remove-btn"
-                      onClick={() => removeFile(index)}
-                      title="Remove file"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
+            
+            {/* ✨ NEW: Conditionally render Upload UI vs Processing UI ✨ */}
+            {isProcessing ? (
+              <div className="processing-container fade-in">
+                <h3 className="processing-title">Processing Documents</h3>
+                <div className="processing-steps">
+                  {processingSteps.map((step, index) => {
+                    const isCompleted = index < uploadPhaseIndex;
+                    const isActive = index === uploadPhaseIndex;
+                    
+                    return (
+                      <div 
+                        key={index} 
+                        className={`step-item ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle2 size={16} className="step-icon completed fade-in" />
+                        ) : isActive ? (
+                          <Loader2 size={16} className="step-icon active spinner fade-in" />
+                        ) : (
+                          <Circle size={16} className="step-icon pending" />
+                        )}
+                        <span className="step-text">{step}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+            ) : (
+              <>
+                <div className="upload-dropzone">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf"
+                    className="file-input-hidden"
+                    id="file-upload"
+                    onClick={(e) => {
+                      e.target.value = null;
+                    }}
+                    onChange={handleFileSelect}
+                  />
+                  <label htmlFor="file-upload" className="upload-label">
+                    <Upload className="upload-icon" size={24} />
+                    <span className="upload-text">
+                      Drop PDFs here or click to browse
+                    </span>
+                  </label>
+                </div>
+
+                {files.length > 0 && (
+                  <div className="selected-files-list fade-in">
+                    {files.map((file, index) => (
+                      <div key={index} className="file-item">
+                        <div className="file-info">
+                          <FileText size={14} className="text-accent" />
+                          <span className="file-name">{file.name}</span>
+                        </div>
+                        <button
+                          className="file-remove-btn"
+                          onClick={() => removeFile(index)}
+                          title="Remove file"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleUpload}
+                  disabled={files.length === 0}
+                  className="upload-submit-btn"
+                >
+                  Upload & Process
+                </button>
+              </>
             )}
 
-            <button
-              onClick={handleUpload}
-              disabled={isProcessing || files.length === 0}
-              className="upload-submit-btn"
-            >
-              {isProcessing && <Loader2 className="spinner" size={16} />}
-              {isProcessing ? "Processing..." : "Upload & Process"}
-            </button>
-
             {uploadError && (
-              <div className="error-box">
+              <div className="error-box fade-in">
                 <p className="error-text">{uploadError}</p>
               </div>
             )}
@@ -264,7 +313,7 @@ export default function App() {
           </div>
 
           {chunksInfo && (
-            <div className="status-badge">
+            <div className="status-badge fade-in">
               <span className="status-dot" />
               <span className="status-text">{chunksInfo} chunks indexed</span>
             </div>
@@ -275,7 +324,6 @@ export default function App() {
           {!isReady && messages.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon-wrapper">
-                {/* ✨ Changed icon to Upload */}
                 <Upload size={28} className="text-accent" />
               </div>
               <h2 className="empty-title">Upload PDFs to begin</h2>
@@ -284,10 +332,9 @@ export default function App() {
                 entirely in your files.
               </p>
 
-              {/* ✨ NEW: Mobile Call-to-Action Button ✨ */}
               {!isReady && (
                 <button
-                  className="mobile-upload-cta"
+                  className="mobile-upload-cta fade-in"
                   onClick={() => setMobileMenuOpen(true)}
                 >
                   <Upload size={18} />
@@ -295,10 +342,7 @@ export default function App() {
                 </button>
               )}
 
-              {/* ✨ NEW: Conditionally hide suggestions on mobile when empty ✨ */}
-              <div
-                className={`suggestions-grid ${!isReady ? "hide-on-mobile" : ""}`}
-              >
+              <div className={`suggestions-grid ${!isReady ? "hide-on-mobile" : ""}`}>
                 {suggestions.map((s) => (
                   <button
                     key={s}
@@ -383,6 +427,10 @@ export default function App() {
         .app-layout { display: flex; height: 100vh; overflow: hidden; background: var(--bg-main); }
         .main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
         
+        /* General Animations */
+        .fade-in { animation: fadeIn 0.3s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        
         /* SIDEBAR CSS */
         .sidebar-container { width: 300px; flex-shrink: 0; border-right: 1px solid var(--border-color); background: var(--bg-secondary); z-index: 40; transition: transform 0.3s ease; }
         .sidebar-content { padding: 24px; height: 100%; display: flex; flex-direction: column; }
@@ -410,6 +458,18 @@ export default function App() {
         .upload-submit-btn:hover:not(:disabled) { background: var(--accent-hover); }
         .upload-submit-btn:disabled { background: var(--bg-tertiary); color: var(--text-tertiary); cursor: not-allowed; }
         
+        /* ✨ NEW: Processing Steps CSS ✨ */
+        .processing-container { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px 16px; margin-bottom: 12px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.1); }
+        .processing-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;}
+        .processing-steps { display: flex; flex-direction: column; gap: 14px; }
+        .step-item { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-tertiary); transition: all 0.3s ease; }
+        .step-item.active { color: var(--text-primary); font-weight: 500; }
+        .step-item.completed { color: var(--text-secondary); }
+        .step-icon { flex-shrink: 0; }
+        .step-icon.completed { color: var(--success-color); }
+        .step-icon.active { color: var(--accent-color); }
+        .step-icon.pending { color: var(--border-color); }
+
         .spinner { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
@@ -451,38 +511,13 @@ export default function App() {
         .send-btn { width: 36px; height: 36px; border-radius: 10px; border: none; background: var(--bg-main); color: var(--text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; }
         .send-btn.active { background: var(--accent-color); color: white; }
 
-        /* ✨ NEW: Mobile CTA Button Styles ✨ */
-        .mobile-upload-cta {
-          display: none; /* Hidden by default on desktop */
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          background: var(--accent-color);
-          color: white;
-          border: none;
-          padding: 14px 24px;
-          border-radius: 12px;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          margin: 0 auto 32px;
-          width: 100%;
-          max-width: 260px;
-          box-shadow: 0 4px 12px var(--accent-light);
-          transition: background 0.2s, transform 0.1s;
-        }
+        .mobile-upload-cta { display: none; align-items: center; justify-content: center; gap: 10px; background: var(--accent-color); color: white; border: none; padding: 14px 24px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin: 0 auto 32px; width: 100%; max-width: 260px; box-shadow: 0 4px 12px var(--accent-light); transition: background 0.2s, transform 0.1s; }
         .mobile-upload-cta:hover { background: var(--accent-hover); }
         .mobile-upload-cta:active { transform: scale(0.97); }
 
         @media (max-width: 768px) {
-          /* ✨ Show CTA button on mobile ✨ */
-          .mobile-upload-cta {
-            display: flex;
-          }
-          /* ✨ Hide suggestions on mobile until document is ready ✨ */
-          .hide-on-mobile {
-            display: none;
-          }
+          .mobile-upload-cta { display: flex; }
+          .hide-on-mobile { display: none; }
           
           .sidebar-container { position: fixed; height: 100%; top: 0; left: 0; transform: translateX(-100%); }
           .sidebar-container.open { transform: translateX(0); }
