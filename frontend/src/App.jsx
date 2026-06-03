@@ -11,6 +11,7 @@ import {
   Trash2,
   CheckCircle2,
   Circle,
+  MessageSquareShare,
 } from "lucide-react";
 import axios from "axios";
 import Message from "./components/Message";
@@ -30,8 +31,8 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  
-  // ✨ NEW: Upload Phase Tracking ✨
+
+  // Upload Phase Tracking
   const [uploadPhaseIndex, setUploadPhaseIndex] = useState(0);
 
   const bottomRef = useRef(null);
@@ -46,10 +47,9 @@ export default function App() {
     if (!isReady && window.innerWidth <= 768) {
       setMobileMenuOpen(true);
     }
-  }, []); 
+  }, []);
 
-  // ✨ NEW: Simulated Progress Tracker Effect ✨
-  // This smoothly advances the UI steps to give users visual feedback while the server works
+  // Simulated Progress Tracker Effect
   useEffect(() => {
     let timeouts = [];
     if (isProcessing) {
@@ -108,8 +108,8 @@ export default function App() {
       setChunksInfo(res.data.chunksProcessed);
       setIsReady(true);
       setMessages([]);
-      setFiles([]); 
-      setMobileMenuOpen(false); 
+      setFiles([]);
+      setMobileMenuOpen(false);
     } catch (error) {
       const rawError =
         error.response?.data?.error || error.message || "Upload failed";
@@ -168,14 +168,23 @@ export default function App() {
     }
   };
 
+  // ✨ NEW: Clickable suggestions for the ready state ✨
+  const handleSuggestionClick = (suggestionText) => {
+    setInput(suggestionText);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      // Optional: If you want clicking a suggestion to automatically send it,
+      // you could call handleSend() right here instead of just focusing the input.
+    }
+  };
+
   const suggestions = [
-    "Summarize the key findings",
+    "Summarize the key findings of this document",
     "What are the main conclusions?",
-    "List all mentioned dates and events",
-    "What methodology was used?",
+    "List all mentioned dates and specific events",
+    "Explain the methodology used here",
   ];
 
-  // ✨ NEW: Processing Steps Array ✨
   const processingSteps = [
     "Reading PDF documents",
     "Extracting & cleaning text",
@@ -201,8 +210,6 @@ export default function App() {
           </h1>
 
           <div className="sidebar-upload-section">
-            
-            {/* ✨ NEW: Conditionally render Upload UI vs Processing UI ✨ */}
             {isProcessing ? (
               <div className="processing-container fade-in">
                 <h3 className="processing-title">Processing Documents</h3>
@@ -210,16 +217,22 @@ export default function App() {
                   {processingSteps.map((step, index) => {
                     const isCompleted = index < uploadPhaseIndex;
                     const isActive = index === uploadPhaseIndex;
-                    
+
                     return (
-                      <div 
-                        key={index} 
-                        className={`step-item ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
+                      <div
+                        key={index}
+                        className={`step-item ${isActive ? "active" : ""} ${isCompleted ? "completed" : ""}`}
                       >
                         {isCompleted ? (
-                          <CheckCircle2 size={16} className="step-icon completed fade-in" />
+                          <CheckCircle2
+                            size={16}
+                            className="step-icon completed fade-in"
+                          />
                         ) : isActive ? (
-                          <Loader2 size={16} className="step-icon active spinner fade-in" />
+                          <Loader2
+                            size={16}
+                            className="step-icon active spinner fade-in"
+                          />
                         ) : (
                           <Circle size={16} className="step-icon pending" />
                         )}
@@ -321,6 +334,7 @@ export default function App() {
         </header>
 
         <div className="messages-area">
+          {/* ✨ STATE 1: No Documents Uploaded ✨ */}
           {!isReady && messages.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon-wrapper">
@@ -332,33 +346,44 @@ export default function App() {
                 entirely in your files.
               </p>
 
-              {!isReady && (
-                <button
-                  className="mobile-upload-cta fade-in"
-                  onClick={() => setMobileMenuOpen(true)}
-                >
-                  <Upload size={18} />
-                  Open Upload Menu
-                </button>
-              )}
+              <button
+                className="mobile-upload-cta fade-in"
+                onClick={() => setMobileMenuOpen(true)}
+              >
+                <Upload size={18} />
+                Open Upload Menu
+              </button>
+            </div>
+          )}
 
-              <div className={`suggestions-grid ${!isReady ? "hide-on-mobile" : ""}`}>
+          {/* ✨ STATE 2: Documents Ready, No Messages Sent Yet ✨ */}
+          {isReady && messages.length === 0 && (
+            <div className="empty-state fade-in">
+              <div className="empty-icon-wrapper success-wrapper">
+                <CheckCircle2 size={28} className="text-success" />
+              </div>
+              <h2 className="empty-title">Your knowledge base is ready!</h2>
+              <p className="empty-subtitle">
+                I've finished analyzing your documents. What would you like to
+                explore?
+              </p>
+
+              <div className="suggestions-grid">
                 {suggestions.map((s) => (
                   <button
                     key={s}
                     className="suggestion-btn"
-                    onClick={() => {
-                      if (isReady) setInput(s);
-                    }}
-                    disabled={!isReady}
+                    onClick={() => handleSuggestionClick(s)}
                   >
-                    {s}
+                    <span>{s}</span>
+                    <MessageSquareShare size={16} className="suggestion-icon" />
                   </button>
                 ))}
               </div>
             </div>
           )}
 
+          {/* ✨ STATE 3: Chat Active ✨ */}
           <div className="messages-list">
             {messages.map((msg, i) => (
               <Message
@@ -423,13 +448,14 @@ export default function App() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); }
         .text-accent { color: var(--accent-color); }
+        .text-success { color: var(--success-color); }
         
         .app-layout { display: flex; height: 100vh; overflow: hidden; background: var(--bg-main); }
         .main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
         
         /* General Animations */
-        .fade-in { animation: fadeIn 0.3s ease forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.4s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         
         /* SIDEBAR CSS */
         .sidebar-container { width: 300px; flex-shrink: 0; border-right: 1px solid var(--border-color); background: var(--bg-secondary); z-index: 40; transition: transform 0.3s ease; }
@@ -458,7 +484,7 @@ export default function App() {
         .upload-submit-btn:hover:not(:disabled) { background: var(--accent-hover); }
         .upload-submit-btn:disabled { background: var(--bg-tertiary); color: var(--text-tertiary); cursor: not-allowed; }
         
-        /* ✨ NEW: Processing Steps CSS ✨ */
+        /* Processing Steps CSS */
         .processing-container { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px 16px; margin-bottom: 12px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.1); }
         .processing-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;}
         .processing-steps { display: flex; flex-direction: column; gap: 14px; }
@@ -492,15 +518,43 @@ export default function App() {
         .messages-list { padding: 24px 0; display: flex; flex-direction: column; gap: 24px; }
         .scroll-anchor { height: 1px; }
 
-        .empty-state { max-width: 540px; margin: 10vh auto; padding: 0 24px; text-align: center; }
+        .empty-state { max-width: 580px; margin: 10vh auto; padding: 0 24px; text-align: center; }
         .empty-icon-wrapper { width: 56px; height: 56px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+        .success-wrapper { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+        
         .empty-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
         .empty-subtitle { font-size: 15px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 32px; }
         
+        /* ✨ NEW: Suggestion Grid & Button Styling ✨ */
         .suggestions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .suggestion-btn { padding: 14px 16px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-secondary); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; transition: all 0.2s ease; }
-        .suggestion-btn:hover:not(:disabled) { border-color: var(--accent-color); color: var(--text-primary); }
-        .suggestion-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .suggestion-btn { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: center; 
+          padding: 16px 20px; 
+          background: var(--bg-secondary); 
+          border: 1px solid var(--border-color); 
+          border-radius: 14px; 
+          color: var(--text-primary); 
+          font-size: 14px; 
+          font-weight: 500; 
+          text-align: left; 
+          cursor: pointer; 
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .suggestion-btn:hover { 
+          border-color: var(--accent-color); 
+          background: var(--bg-tertiary);
+          transform: translateY(-2px);
+        }
+        .suggestion-icon {
+          color: var(--text-tertiary);
+          transition: color 0.2s;
+        }
+        .suggestion-btn:hover .suggestion-icon {
+          color: var(--accent-color);
+        }
 
         .input-wrapper { padding: 0 24px 24px; background: linear-gradient(to top, var(--bg-main) 80%, transparent); position: sticky; bottom: 0; }
         .input-container { max-width: 768px; margin: 0 auto; }
@@ -517,7 +571,7 @@ export default function App() {
 
         @media (max-width: 768px) {
           .mobile-upload-cta { display: flex; }
-          .hide-on-mobile { display: none; }
+          .suggestions-grid { grid-template-columns: 1fr; } /* Stack vertically on small screens */
           
           .sidebar-container { position: fixed; height: 100%; top: 0; left: 0; transform: translateX(-100%); }
           .sidebar-container.open { transform: translateX(0); }
