@@ -36,6 +36,13 @@ export default function App() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // ✨ NEW: Auto-open sidebar on mobile for new users
+  useEffect(() => {
+    if (!isReady && window.innerWidth <= 768) {
+      setMobileMenuOpen(true);
+    }
+  }, []); // Runs once on mount
+
   const handleInput = (e) => {
     setInput(e.target.value);
     if (textareaRef.current) {
@@ -90,7 +97,7 @@ export default function App() {
       setIsReady(true);
       setMessages([]);
       setFiles([]); // Clear queue on success
-      setMobileMenuOpen(false);
+      setMobileMenuOpen(false); // Auto-close menu on success
     } catch (error) {
       const rawError =
         error.response?.data?.error || error.message || "Upload failed";
@@ -196,7 +203,6 @@ export default function App() {
               </label>
             </div>
 
-            {/* ✨ NEW: Selected Files Queue ✨ */}
             {files.length > 0 && (
               <div className="selected-files-list">
                 {files.map((file, index) => (
@@ -269,15 +275,30 @@ export default function App() {
           {!isReady && messages.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon-wrapper">
-                <Sparkles size={28} className="text-accent" />
+                {/* ✨ Changed icon to Upload */}
+                <Upload size={28} className="text-accent" />
               </div>
               <h2 className="empty-title">Upload PDFs to begin</h2>
               <p className="empty-subtitle">
-                Add your documents in the sidebar. Once processed, ask anything
-                — answers will be grounded entirely in your files.
+                Add your documents to start chatting. Answers will be grounded
+                entirely in your files.
               </p>
 
-              <div className="suggestions-grid">
+              {/* ✨ NEW: Mobile Call-to-Action Button ✨ */}
+              {!isReady && (
+                <button
+                  className="mobile-upload-cta"
+                  onClick={() => setMobileMenuOpen(true)}
+                >
+                  <Upload size={18} />
+                  Open Upload Menu
+                </button>
+              )}
+
+              {/* ✨ NEW: Conditionally hide suggestions on mobile when empty ✨ */}
+              <div
+                className={`suggestions-grid ${!isReady ? "hide-on-mobile" : ""}`}
+              >
                 {suggestions.map((s) => (
                   <button
                     key={s}
@@ -430,7 +451,39 @@ export default function App() {
         .send-btn { width: 36px; height: 36px; border-radius: 10px; border: none; background: var(--bg-main); color: var(--text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; }
         .send-btn.active { background: var(--accent-color); color: white; }
 
+        /* ✨ NEW: Mobile CTA Button Styles ✨ */
+        .mobile-upload-cta {
+          display: none; /* Hidden by default on desktop */
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          background: var(--accent-color);
+          color: white;
+          border: none;
+          padding: 14px 24px;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          margin: 0 auto 32px;
+          width: 100%;
+          max-width: 260px;
+          box-shadow: 0 4px 12px var(--accent-light);
+          transition: background 0.2s, transform 0.1s;
+        }
+        .mobile-upload-cta:hover { background: var(--accent-hover); }
+        .mobile-upload-cta:active { transform: scale(0.97); }
+
         @media (max-width: 768px) {
+          /* ✨ Show CTA button on mobile ✨ */
+          .mobile-upload-cta {
+            display: flex;
+          }
+          /* ✨ Hide suggestions on mobile until document is ready ✨ */
+          .hide-on-mobile {
+            display: none;
+          }
+          
           .sidebar-container { position: fixed; height: 100%; top: 0; left: 0; transform: translateX(-100%); }
           .sidebar-container.open { transform: translateX(0); }
           .sidebar-overlay, .mobile-menu-btn, .mobile-close-btn { display: block; }
